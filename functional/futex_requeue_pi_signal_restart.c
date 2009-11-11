@@ -54,6 +54,8 @@ void usage(char *prog)
 	printf("Usage: %s\n", prog);
 	printf("  -c	Use color\n");
 	printf("  -h	Display this help message\n");
+	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
+	       VQUIET, VCRITICAL, VINFO);
 }
 
 int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy, int prio)
@@ -66,27 +68,23 @@ int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy,
 	memset(&schedp, 0, sizeof(schedp));
 
 	if ((ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setinheritsched: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setinheritsched\n", ret);
 		return -1;
 	}
 
 	if ((ret = pthread_attr_setschedpolicy(&attr, policy)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setschedpolicy: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setschedpolicy\n", ret);
 		return -1;
 	}
 
 	schedp.sched_priority = prio;
 	if ((ret = pthread_attr_setschedparam(&attr, &schedp)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setschedparam: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setschedparam\n", ret);
 		return -1;
 	}
 
 	if ((ret = pthread_create(pth, &attr, func, arg)) != 0) {
-		fprintf(stderr, "\t%s: pthread_create: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_create\n", ret);
 		return -1;
 	}
 	return 0;
@@ -94,7 +92,7 @@ int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy,
 
 void handle_signal(int signo)
 {
-	fprintf(stderr, "\thandled signal: %d\n", signo);
+	info("handled signal: %d\n", signo);
 }
 
 void *waiterfn(void *arg)
@@ -102,24 +100,24 @@ void *waiterfn(void *arg)
 	unsigned int old_val;
 	int ret;
 
-	fprintf(stderr, "\tWaiter running\n"); 
+	info("Waiter running\n"); 
 
-	fprintf(stderr, "\tCalling FUTEX_LOCK_PI on f2=%x @ %p\n", f2, &f2);
+	info("Calling FUTEX_LOCK_PI on f2=%x @ %p\n", f2, &f2);
 	/* cond_wait */
 	old_val = f1;
 	ret = futex_wait_requeue_pi(&f1, old_val, &(f2), NULL, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
 		ret = -errno;
-		fprintf(stderr, "\t%s: waiterfn: %s\n", ERROR, strerror(errno));
+		error("waiterfn\n", errno);
 	}
-	fprintf(stderr, "\tFUTEX_WAIT_REQUEUE_PI returned: %d\n", ret); fflush(stdout);
-	fprintf(stderr, "\tw1:futex: %x\n", f2); fflush(stdout);
+	info("FUTEX_WAIT_REQUEUE_PI returned: %d\n", ret);
+	info("w1:futex: %x\n", f2);
 	if (ret)
 		futex_lock_pi(&f2, 0, 0, FUTEX_PRIVATE_FLAG);
 	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
-	fprintf(stderr, "\tWaiter exiting with %d\n", ret); fflush(stdout);
-	fprintf(stderr, "\tw2:futex: %x\n", f2); fflush(stdout);
+	info("Waiter exiting with %d\n", ret);
+	info("w2:futex: %x\n", f2);
 	return (void*)(long)ret;
 }
 
@@ -131,7 +129,7 @@ int main(int argc, char *argv[])
 	pthread_t waiter;
 	int c, ret = 0;
 
-	while ((c = getopt(argc, argv, "ch")) != -1) {
+	while ((c = getopt(argc, argv, "chv:")) != -1) {
 		switch(c) {
 		case 'c':
 			futextest_use_color(1);
@@ -139,6 +137,9 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage(basename(argv[0]));
 			exit(0);
+		case 'v':
+			futextest_verbosity(atoi(optarg));
+			break;
 		default:
 			usage(basename(argv[0]));
 			exit(1);
@@ -152,57 +153,57 @@ int main(int argc, char *argv[])
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	if (sigaction(SIGUSR1, &sa, NULL)) {
-		fprintf(stderr, "\t%s: sigaction: %s\n", ERROR, strerror(errno));
+		error("sigaction\n", errno);
 		exit(1);
 	}
 
-	fprintf(stderr, "\tm1:futex: %x\n", f2);
-	fprintf(stderr, "\tCreating waiter\n");
+	info("m1:futex: %x\n", f2);
+	info("Creating waiter\n");
 	if ((ret = create_rt_thread(&waiter, waiterfn, NULL, SCHED_FIFO, 1))) {
-		perror("Creating waiting thread failed");
+		error("Creating waiting thread failed", ret);
 		exit(1);
 	}
-	fprintf(stderr, "\tm2:futex: %x\n", f2);
+	info("m2:futex: %x\n", f2);
 
-	fprintf(stderr, "\tCalling FUTEX_LOCK_PI on mutex=%x @ %p\n", f2, &f2);
+	info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", f2, &f2);
 	
 	futex_lock_pi(&f2, 0, 0, FUTEX_PRIVATE_FLAG);
-	fprintf(stderr, "\tm3:futex: %x\n", f2);
+	info("m3:futex: %x\n", f2);
 
-	fprintf(stderr, "\tWaking waiter via FUTEX_CMP_REQUEUE_PI\n");fflush(stdout);
+	info("Waking waiter via FUTEX_CMP_REQUEUE_PI\n");
 	/* cond_signal */
 	old_val = f1;
 	ret = futex_cmp_requeue_pi(&f1, old_val, &(f2),
 				   1, 0, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
 		ret = -errno;
-		fprintf(stderr, "\t%s: FUTEX_CMP_REQUEUE_PI failed: %s\n",
-			ERROR, strerror(errno));
+		error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
+		
 		/* FIXME - do something sane.... */
 	}
-	fprintf(stderr, "\tm4:futex: %x\n", f2); 
+	info("m4:futex: %x\n", f2); 
 
 	/* give the waiter time to wake and block on the lock */
 	sleep(2);
-	fprintf(stderr, "\tm5:futex: %x\n", f2);
+	info("m5:futex: %x\n", f2);
 
 	/* 
 	 * signal the waiter to force a syscall restart to
 	 * futex_lock_pi_restart()
 	 */
-	fprintf(stderr, "\tIssuing SIGUSR1 to waiter\n"); 
+	info("Issuing SIGUSR1 to waiter\n"); 
 	pthread_kill(waiter, SIGUSR1);
 
 	/* give the signal time to get to the waiter */
 	sleep(2);
-	fprintf(stderr, "\tm6:futex: %x\n", f2);
-	fprintf(stderr, "\tCalling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", f2, &f2);
+	info("m6:futex: %x\n", f2);
+	info("Calling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", f2, &f2);
 	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
 	/* Wait for waiter to finish */
-	fprintf(stderr, "\tWaiting for waiter to return\n");
+	info("Waiting for waiter to return\n");
 	pthread_join(waiter, NULL);
-	fprintf(stderr, "\tm7:futex: %x\n", f2);
+	info("m7:futex: %x\n", f2);
 
 	printf("Result: %s\n", ret ? ERROR : PASS);
 	return ret;

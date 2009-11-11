@@ -46,6 +46,8 @@ void usage(char *prog)
 	printf("  -c	Use color\n");
 	printf("  -h	Display this help message\n");
 	printf("  -t N	Timeout in nanoseconds (default: 100,000)\n");
+	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
+	       VQUIET, VCRITICAL, VINFO);
 }
 
 int main(int argc, char *argv[])
@@ -55,7 +57,7 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	int c;
 
-	while ((c = getopt(argc, argv, "cht:")) != -1) {
+	while ((c = getopt(argc, argv, "cht:v:")) != -1) {
 		switch(c) {
 		case 'c':
 			futextest_use_color(1);
@@ -65,6 +67,9 @@ int main(int argc, char *argv[])
 			exit(0);
 		case 't':
 			timeout_ns = atoi(optarg);
+			break;
+		case 'v':
+			futextest_verbosity(atoi(optarg));
 			break;
 		default:
 			usage(basename(argv[0]));
@@ -78,13 +83,14 @@ int main(int argc, char *argv[])
 	/* 100us relative timeout */
 	to.tv_sec = 0;
 	to.tv_nsec = timeout_ns;
+	info("Calling futex_wait on f1: %u @ %p\n", f1, &f1);
 	ret = futex_wait(&f1, f1, &to, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
 		ret = -errno;
 		if (ret == -ETIMEDOUT)
 			ret = 0;
 		else
-			perror("ERROR: futex_wait");
+			error("futex_wait", errno);
 	}
 
 	printf("Result: %s\n", ret ? ERROR : PASS);

@@ -50,6 +50,8 @@ void usage(char *prog)
 	printf("Usage: %s\n", prog);
 	printf("  -c	Use color\n");
 	printf("  -h	Display this help message\n");
+	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
+	       VQUIET, VCRITICAL, VINFO);
 }
 
 void *blocking_child(void *arg)
@@ -57,7 +59,7 @@ void *blocking_child(void *arg)
 	child_ret = futex_wait(&f1, f1, NULL, FUTEX_PRIVATE_FLAG);
 	if (child_ret < 0) {
 		child_ret = -errno;
-		fprintf(stderr, "\t%s: futex_wait: %s\n", ERROR, strerror(errno));
+		error("futex_wait\n", errno);
 	}
 	return (void *)&child_ret;
 }
@@ -68,7 +70,7 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	int c;
 
-	while ((c = getopt(argc, argv, "ch")) != -1) {
+	while ((c = getopt(argc, argv, "chv:")) != -1) {
 		switch(c) {
 		case 'c':
 			futextest_use_color(1);
@@ -76,6 +78,9 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage(basename(argv[0]));
 			exit(0);
+		case 'v':
+			futextest_verbosity(atoi(optarg));
+			break;
 		default:
 			usage(basename(argv[0]));
 			exit(1);
@@ -87,8 +92,7 @@ int main(int argc, char *argv[])
 
 	ret = pthread_create(&child, NULL, blocking_child, NULL);
 	if (ret) {
-		fprintf(stderr, "\t%s: pthread_create: %s\n",
-			ERROR, strerror(errno));
+		error("pthread_create\n", errno);
 		goto out;
 	}
 	/* Allow the child to block in the kernel. */
@@ -113,23 +117,18 @@ int main(int argc, char *argv[])
 			if (ret == 1)
 				ret = 0;
 			else if (ret < 0)
-				fprintf(stderr, "\t%s: futex_wake: %s\n",
-					ERROR, strerror(errno));
+				error("futex_wake\n", errno);
 			else {
-				fprintf(stderr, "\t%s: futex_wake did not wake"
-					"the child\n", ERROR);
+				error("futex_wake did not wake the child\n", 0);
 				ret = -1;
 			}
 		} else {
-			fprintf(stderr, "\t%s: futex_cmp_requeue_pi: %s\n",
-				ERROR, strerror(errno));
+			error("futex_cmp_requeue_pi\n", errno);
 		}
 	} else if (ret > 0) {
-		fprintf(stderr, "\t%s: futex_cmp_requeue_pi failed to detect "
-			"the mismatch\n", FAIL);
+		fail("futex_cmp_requeue_pi failed to detect the mismatch\n");
 	} else {
-		fprintf(stderr, "\t%s: futex_cmp_requeue_pi found no waiters\n",
-			ERROR);
+		error("futex_cmp_requeue_pi found no waiters\n", 0);
 		ret = -1;
 	}
 

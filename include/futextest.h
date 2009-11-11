@@ -49,18 +49,27 @@
 #define BRIGHT_YELLOW ESC, BRIGHT, ';', YELLOW, ESCEND
 #define BRIGHT_RED ESC, BRIGHT, ';', RED, ESCEND
 #define RESET_COLOR ESC, '0', 'm'
-char PASS_COLOR[] = {BRIGHT_GREEN, ' ', 'P', 'A', 'S', 'S', RESET_COLOR, 0};
-char ERROR_COLOR[] = {BRIGHT_YELLOW, 'E', 'R', 'R', 'O', 'R', RESET_COLOR, 0};
-char FAIL_COLOR[] = {BRIGHT_RED, ' ', 'F', 'A', 'I', 'L', RESET_COLOR, 0};
-char PASS_NORMAL[] = " PASS";
-char ERROR_NORMAL[] = "ERROR";
-char FAIL_NORMAL[] = " FAIL";
+static char PASS_COLOR[] = {BRIGHT_GREEN, ' ', 'P', 'A', 'S', 'S', RESET_COLOR, 0};
+static char ERROR_COLOR[] = {BRIGHT_YELLOW, 'E', 'R', 'R', 'O', 'R', RESET_COLOR, 0};
+static char FAIL_COLOR[] = {BRIGHT_RED, ' ', 'F', 'A', 'I', 'L', RESET_COLOR, 0};
+static char INFO_NORMAL[] = " INFO";
+static char PASS_NORMAL[] = " PASS";
+static char ERROR_NORMAL[] = "ERROR";
+static char FAIL_NORMAL[] = " FAIL";
+char *INFO = INFO_NORMAL;
 char *PASS = PASS_NORMAL;
 char *ERROR = ERROR_NORMAL;
 char *FAIL = FAIL_NORMAL;
 
 typedef volatile __uint32_t futex_t;
 #define FUTEX_INITIALIZER 0
+
+/* Verbosity setting for INFO messages */
+#define VQUIET    0
+#define VCRITICAL 1
+#define VINFO     2
+#define VMAX      VINFO
+int _verbose = VCRITICAL;
 
 /* Define the newer op codes if the system header file is not up to date. */
 #ifndef FUTEX_WAIT_REQUEUE_PI
@@ -218,3 +227,43 @@ void futextest_use_color(int use_color)
 		FAIL = FAIL_NORMAL;
 	}
 }
+
+/**
+ * futex_test_verbose() - Set verbosity of test output
+ * @verbose:	Enable (1) verbose output or not (0)
+ *
+ * Currently setting verbose=1 will enable INFO messages and 0 will disable
+ * them. FAIL and ERROR messages are always displayed.
+ */
+void futextest_verbosity(int level)
+{
+	if (level > VMAX)
+		level = VMAX;
+	else if (level < 0)
+		level = 0;
+	_verbose = level;
+}
+
+/* Output macros */
+#define info(message, vargs...) \
+do { \
+	if (_verbose >= VINFO) \
+		fprintf(stderr, "\t%s: "message, INFO, ##vargs); \
+} while (0)
+
+#define error(message, err, args...) \
+do { \
+	if (_verbose >= VCRITICAL) {\
+		if (err) \
+			fprintf(stderr, "\t%s: %s: "message, \
+				ERROR, strerror(err), ##args); \
+		else \
+			fprintf(stderr, "\t%s: "message, ERROR, ##args); \
+	} \
+} while (0)
+
+#define fail(message, args...) \
+do { \
+	if (_verbose >= VCRITICAL) \
+		fprintf(stderr, "\t%s: "message, FAIL, ##args); \
+} while (0)

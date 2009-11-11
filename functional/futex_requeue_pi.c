@@ -80,6 +80,8 @@ void usage(char *prog)
 	printf("  -l	Lock the pi futex across requeue\n");
 	printf("  -o	Use a third party pi futex owner during requeue\n");
 	printf("  -t N	Timeout in nanoseconds (default: 100,000)\n");
+	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
+	       VQUIET, VCRITICAL, VINFO);
 }
 
 int create_pi_mutex(pthread_mutex_t *mutex)
@@ -88,34 +90,31 @@ int create_pi_mutex(pthread_mutex_t *mutex)
 	pthread_mutexattr_t mutexattr;
 
 	if ((ret = pthread_mutexattr_init(&mutexattr)) != 0) {
-		fprintf(stderr, "\t%s: pthread_mutexattr_init: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_mutexattr_init\n", ret);
 		return -1;
 	}
 	if ((ret = pthread_mutexattr_setprotocol(&mutexattr, PTHREAD_PRIO_INHERIT)) != 0) {
-		fprintf(stderr, "\t%s: pthread_mutexattr_setprotocol: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_mutexattr_setprotocol", ret);
 		pthread_mutexattr_destroy(&mutexattr);
 		return -1;
 	}
 	if ((ret = pthread_mutexattr_setpshared(&mutexattr, PSHARED)) != 0) {
-		fprintf(stderr, "\t%s: pthread_mutexattr_setpshared(%d): %s\n",
-			ERROR, PSHARED, strerror(ret));
+		error("pthread_mutexattr_setpshared(%d)\n", ret, PSHARED);
 		pthread_mutexattr_destroy(&mutexattr);
 		return -1;
 	}
 
 	int pshared;
 	pthread_mutexattr_getpshared(&mutexattr, &pshared);
-	fprintf(stderr, "\tpshared set to %d\n", pshared);
+	info("pshared set to %d\n", pshared);
 
 	if ((ret = pthread_mutex_init(mutex, &mutexattr)) != 0) {
-		printf("pthread_mutex_init: %s\n", strerror(ret));
+		error("pthread_mutex_init", ret);
 		pthread_mutexattr_destroy(&mutexattr);
 		return -1;
 	}
 
-	fprintf(stderr, "\tmutex.__data.__kind: %x\n", mutex->__data.__kind);
+	info("mutex.__data.__kind: %x\n", mutex->__data.__kind);
 
 	return 0;
 }
@@ -130,27 +129,23 @@ int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy,
 	memset(&schedp, 0, sizeof(schedp));
 
 	if ((ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setinheritsched: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setinheritsched\n", ret);
 		return -1;
 	}
 
 	if ((ret = pthread_attr_setschedpolicy(&attr, policy)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setschedpolicy: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setschedpolicy\n", ret);
 		return -1;
 	}
 
 	schedp.sched_priority = prio;
 	if ((ret = pthread_attr_setschedparam(&attr, &schedp)) != 0) {
-		fprintf(stderr, "\t%s: pthread_attr_setschedparam: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_attr_setschedparam\n", ret);
 		return -1;
 	}
 
 	if ((ret = pthread_create(pth, &attr, func, arg)) != 0) {
-		fprintf(stderr, "\t%s: pthread_create: %s\n",
-			ERROR, strerror(ret));
+		error("pthread_create\n", ret);
 		return -1;
 	}
 	return 0;
@@ -163,7 +158,7 @@ void *waiterfn(void *arg)
 	unsigned int old_val;
 	int ret;
 
-	fprintf(stderr, "\tWaiter %ld: running\n", args->id); fflush(stderr);
+	info("Waiter %ld: running\n", args->id);
 	/* Each thread sleeps for a different amount of time
 	 * This is to avoid races, because we don't lock the
 	 * external mutex here */
@@ -176,16 +171,16 @@ void *waiterfn(void *arg)
 	pthread_barrier_wait(&waiter_barrier);
 	ret = futex_wait_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock),
 				    args->timeout, FUTEX_PRIVATE_FLAG);
-	fprintf(stderr, "\twaiter %ld woke\n", args->id); fflush(stderr);
+	info("waiter %ld woke\n", args->id);
 	if (ret < 0) {
 		ret = -errno;
-		fprintf(stderr, "\t%s: waiterfn: %s\n", ERROR, strerror(errno));
+		error("waiterfn\n", errno);
 		pthread_mutex_lock(&mutex);
 	}
 	waiters_woken++;
 	pthread_mutex_unlock(&mutex);
 
-	fprintf(stderr, "\tWaiter %ld: exiting with %d\n", args->id, ret);
+	info("Waiter %ld: exiting with %d\n", args->id, ret);
 	return (void*)(long)ret;
 }
 
@@ -201,8 +196,8 @@ void *broadcast_wakerfn(void *arg)
 	fprintf(stderr, "\tWaker: Calling broadcast\n");
 
 	if (lock) {
-		fprintf(stderr, "\tCalling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
-			mutex.__data.__lock, &mutex.__data.__lock);
+		info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
+		     mutex.__data.__lock, &mutex.__data.__lock);
 		pthread_mutex_lock(&mutex);
 	}
 	/* cond_broadcast */
@@ -211,18 +206,16 @@ void *broadcast_wakerfn(void *arg)
 				   nr_requeue, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
 		ret = -errno;
-		fprintf(stderr, "\t%s: FUTEX_CMP_REQUEUE_PI failed: %s\n",
-			ERROR, strerror(errno));
+		error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
 	}
 
 	if (pthread_barrier_wait(&wake_barrier) == -EINVAL)
-		fprintf(stderr, "\t%s: broadcast_wakerfn: %s\n",
-			ERROR, strerror(errno));
+		error("broadcast_wakerfn\n", errno);
 
 	if (lock)
 		pthread_mutex_unlock(&mutex);
 
-	fprintf(stderr, "\tWaker: exiting with %d\n", ret);
+	info("Waker: exiting with %d\n", ret);
 	return (void *)(long)ret;;
 }
 
@@ -238,53 +231,51 @@ void *signal_wakerfn(void *arg)
 
 	pthread_barrier_wait(&waiter_barrier);
 	while (task_count < THREAD_MAX && waiters_woken < THREAD_MAX) {
-		fprintf(stderr, "\ttask_count: %d, waiters_woken: %d\n",
-			task_count, waiters_woken);
+		info("task_count: %d, waiters_woken: %d\n",
+		     task_count, waiters_woken);
 		if (lock) {
-			fprintf(stderr, "\tCalling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
-				mutex.__data.__lock, &mutex.__data.__lock);
+			info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
+			     mutex.__data.__lock, &mutex.__data.__lock);
 			pthread_mutex_lock(&mutex);
 		}
-		fprintf(stderr, "\tWaker: Calling signal\n");
+		info("Waker: Calling signal\n");
 		/* cond_signal */
 		old_val = wait_q;
 		ret = futex_cmp_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock),
 					   nr_wake, nr_requeue, FUTEX_PRIVATE_FLAG);
 		if (ret < 0)
 			ret = -errno;
-		fprintf(stderr, "\tfutex: %x\n", mutex.__data.__lock);
+		info("futex: %x\n", mutex.__data.__lock);
 		if (lock) {
-			fprintf(stderr, "\tCalling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", 
-				mutex.__data.__lock, &mutex.__data.__lock);
+			info("Calling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", 
+			     mutex.__data.__lock, &mutex.__data.__lock);
 			pthread_mutex_unlock(&mutex);
 		}
-		fprintf(stderr, "\tfutex: %x\n", mutex.__data.__lock);
+		info("futex: %x\n", mutex.__data.__lock);
 		if (ret < 0) {
-			fprintf(stderr, "\t%s: FUTEX_CMP_REQUEUE_PI failed: %s\n",
-				ERROR, strerror(errno));
+			error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
 			break;
 		}
 		
 		if (!i) {
-			fprintf(stderr, "\twaker waiting on wake_barrier\n");
+			info("waker waiting on wake_barrier\n");
 			if (pthread_barrier_wait(&wake_barrier) == -EINVAL)
-				fprintf(stderr, "\t%s: signal_wakerfn: %s",
-					ERROR, strerror(errno));
+				error("signal_wakerfn", errno);
 		}
 
 		task_count += ret;
 		usleep(SIGNAL_PERIOD_US);
 		i++;
 		if (i > 1000) {
-			fprintf(stderr, "\ti>1000, giving up on pending waiters...\n");
+			info("i>1000, giving up on pending waiters...\n");
 			break;
 		}
 	}
 	if (ret >= 0)
 		ret = task_count;
 
-	fprintf(stderr, "\tWaker: exiting with %d\n", ret);
-	fprintf(stderr, "\tWaker: waiters_woken: %d\n", waiters_woken);
+	info("Waker: exiting with %d\n", ret);
+	info("Waker: waiters_woken: %d\n", waiters_woken);
 	return (void *)(long)ret;
 }
 
@@ -292,8 +283,7 @@ void *third_party_blocker(void *arg)
 {
 	pthread_mutex_lock(&mutex);
 	if (pthread_barrier_wait(&wake_barrier) == -EINVAL)
-		fprintf(stderr, "\t%s: third_party_blocker: %s",
-			ERROR, strerror(errno));
+		error("third_party_blocker\n", errno);
 	pthread_mutex_unlock(&mutex);
 	return NULL;
 }
@@ -317,14 +307,12 @@ int unit_test(int broadcast, long lock, int third_party_owner, long timeout_ns)
 
 	if ((ret = pthread_barrier_init(&wake_barrier, NULL,
 					1+third_party_owner))) {
-		fprintf(stderr, "\t%s: pthread_barrier_init(wake_barrier) failed: %s\n",
-			ERROR, strerror(errno));
+		error("pthread_barrier_init(wake_barrier) failed\n", errno);
 		return ret;
 	}
 	if ((ret = pthread_barrier_init(&waiter_barrier, NULL,
 					1+THREAD_MAX))) {
-		fprintf(stderr, "\t%s: pthread_barrier_init(waiter_barrier) failed: %s\n",
-			ERROR, strerror(errno));
+		error("pthread_barrier_init(waiter_barrier) failed\n", errno);
 		return ret;
 	}
 
@@ -334,8 +322,8 @@ int unit_test(int broadcast, long lock, int third_party_owner, long timeout_ns)
 	if (third_party_owner) {
 		if ((ret = create_rt_thread(&blocker, third_party_blocker, NULL,
 					    SCHED_FIFO, 1))) {
-			fprintf(stderr, "\t%s: Creating third party blocker thread failed: %s\n",
-				ERROR, strerror(errno));
+			error("Creating third party blocker thread failed\n",
+			      errno);
 			goto out;
 		}
 	}
@@ -344,18 +332,16 @@ int unit_test(int broadcast, long lock, int third_party_owner, long timeout_ns)
 	for (i = 0; i < THREAD_MAX; i++) {
 		args[i].id = i;
 		args[i].timeout = tsp;
-		fprintf(stderr, "\tStarting thread %ld\n", i); fflush(stderr);
+		info("Starting thread %ld\n", i);
 		if ((ret = create_rt_thread(&waiter[i], waiterfn, (void *)&args[i],
 					    SCHED_FIFO, 1))) {
-			fprintf(stderr, "\t%s: Creating waiting thread failed: %s\n",
-				ERROR, strerror(errno));
+			error("Creating waiting thread failed\n", errno);
 			goto out;
 		}
 	}
 	if ((ret = create_rt_thread(&waker, wakerfn, (void *)lock,
 				    SCHED_FIFO, 1))) {
-		fprintf(stderr, "\t%s: Creating waker thread failed: %s\n",
-			ERROR, strerror(errno));
+		error("Creating waker thread failed\n", errno);
 		goto out;
 	}
 
@@ -369,11 +355,10 @@ int unit_test(int broadcast, long lock, int third_party_owner, long timeout_ns)
 
 out:
 	if ((ret = pthread_barrier_destroy(&wake_barrier)))
-		fprintf(stderr, "\t%s: pthread_barrier_destroy(wake_barrier) failed: %s\n",
-			ERROR, strerror(errno));
+		error("pthread_barrier_destroy(wake_barrier) failed\n", errno);
 	if ((ret = pthread_barrier_destroy(&waiter_barrier)))
-		fprintf(stderr, "\t%s: pthread_barrier_destroy(waiter_barrier) failed: %s\n",
-			ERROR, strerror(errno));
+		error("pthread_barrier_destroy(waiter_barrier) failed\n",
+		      errno);
 	return ret;
 }
 
@@ -381,7 +366,7 @@ int main(int argc, char *argv[])
 {
 	int c, ret;
 
-	while ((c = getopt(argc, argv, "bchlot:")) != -1) {
+	while ((c = getopt(argc, argv, "bchlot:v:")) != -1) {
 		switch(c) {
 		case 'b':
 			broadcast = 1;
@@ -401,6 +386,9 @@ int main(int argc, char *argv[])
 		case 't':
 			timeout_ns = atoi(optarg);
 			break;
+		case 'v':
+			futextest_verbosity(atoi(optarg));
+			break;
 		default:
 			usage(basename(argv[0]));
 			exit(1);
@@ -412,7 +400,7 @@ int main(int argc, char *argv[])
 	       broadcast, locked, owner, timeout_ns);
 
 	if ((ret = create_pi_mutex(&mutex)) != 0) {
-		printf("Creating pi mutex failed\n");
+		error("Creating pi mutex failed\n", ret);
 		exit(1);
 	}
 
