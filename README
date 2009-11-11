@@ -1,0 +1,234 @@
+Futex Test
+==========
+Futex Test is intended to thoroughly test the Linux kernel futex system call
+API. To the extent possible, each test is implemented using raw system calls
+as well as the glibc pthread library.
+
+Tests shall fall under one of three categories:
+o Functional
+  Functional tests shall test the documented behavior of the futex operation
+  code under test. This includes checking for proper behavior under normal use,
+  odd corner cases, regression tests, and abject abuse and misuse.
+
+o Stress
+  Stress tests shall impose a heavy load on the futex infrastructure. Tests
+  should stress the bottlenecks of the futex implementation, such as the
+  hashbucket locks, the mmap_sem (for shared futexes), and scheduler wakeups.
+
+o Performance
+  Performance tests shall measure quantifiable attributes of futex usage, such
+  as timeout latency, operations per second, scheduler wake-ups, etc.
+
+Quick Start
+-----------
+# make
+# ./run.sh
+
+Design and Implementation Goals
+-------------------------------
+o Tests should be as self contained as is practical so as to facilitate sharing
+  the individual tests on mailing list discussions and bug reports.
+o The build system shall remain as simple as possible, avoiding any archive or
+  shared object building and linking.
+o Where possible, any helper functions or other package-wide code shall be
+  implemented in header files, avoiding the need to compile intermediate object
+  files.
+o External dependendencies shall remain as minimal as possible. Currently gcc
+  and glibc are the only dependencies.
+o Tests return 0 for success and < 0 for failure.
+
+Output Formatting
+-----------------
+Test output shall be easily parsable by both human and machine. Title and
+results are printed to stdout, while intermediate ERROR or FAIL messages are
+sent to stderr. Tests shall support the -c option to print PASS, FAIL, and
+ERROR strings in color for easy visual parsing. Output shall conform to the
+following format:
+
+test_name: Description of the test
+	Arguments: arg1=val1 #units specified for clarity where appropriate
+	ERROR: Description of unexpected error
+	 FAIL: Reason for test failure
+	# FIXME: Perhaps an " INFO: informational message" option would be
+	#        useful here. Using -v to toggle it them on and off, as with -c.
+	# there may be multiple ERROR or FAIL messages
+Result: (PASS|FAIL|ERROR)		# functional tests
+Result: (measurement (units)|ERROR)	# performance tests
+Result: (COMPLETED|ERROR)		# stress tests
+
+Naming
+------
+o FIXME: decide on a sane test naming scheme.  Currently the tests are named
+  based on the primary futex operation they test. Eventually this will become a
+  problem as we intend to write multiple tests which collide in this namespace.
+  Perhaps something like "wait-wake-1" "wait-wake-2" is adequate, leaving the 
+  detailed description in the test source and the output. Opinions welcome!
+
+Coding Style
+------------
+o The Futex Test project adheres to the coding standards set forth by Linux
+  kernel as defined in the Linux source Documentation/CodingStyle.
+
+
+--------------------------------------------------------------------------------
+
+
+Darren's Notes
+==============
+TODO
+----
+o Incorporate robust futexes
+o execve testing
+  - http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=322a2c100a8998158445599ea437fb556aa95b11
+  - http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=fc6b177dee33365ccb29fe6d2092223cf8d679f9
+o http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=eaaea8036d0261d87d7072c5bc88c7ea730c18ac
+
+Futex Op Codes
+--------------
+FUTEX_WAIT
+FUTEX_WAKE
+FUTEX_FD
+FUTEX_REQUEUE
+FUTEX_CMP_REQUEUE
+FUTEX_WAKE_OP
+FUTEX_LOCK_PI
+FUTEX_UNLOCK_PI
+FUTEX_TRYLOCK_PI
+FUTEX_WAIT_BITSET
+FUTEX_WAKE_BITSET
+FUTEX_WAIT_REQUEUE_PI
+FUTEX_CMP_REQUEUE_PI
+
+Syscalls to Test
+----------------
+futex_wake
+futex_wake_op
+futex_cmp_requeue
+futex_wait
+futex_lock_pi
+futex_unlock_pi
+futex_wait_requeue_pi
+futex_cmp_requeue_pi
+
+Functional Tests
+----------------
+requeue_pi/*
+	Exercise the FUTEX_WAIT_REQUEUE_PI and FUTEX_CMP_REQUEUE_PI op codes,
+	under every possible combination of the following scenarios:
+
+	o shared and private futexes
+	o CLOCK_MONOTONIC and CLOCK_REALTIME timeouts (and none)
+	o Signal handling prior to and post requeue
+	  - http://bugzilla.kernel.org/show_bug.cgi?id=14289
+	o correct and incorrect settings for val
+	o target futex owned by waker, owned by third party, unowned
+	o OWNERDIED reclaim of mutex
+	o ensure priority ordered wakeup of waiters
+
+	Error and Misuse Cases
+	----------------------
+	o mixed shared and private futexes (should fail)
+	o pi source futex
+	o non-pi target futex
+	o unmapped shared futex fault handling
+	o bogus uaddrs
+	o invalid nr_wake and nr_requeue values
+	o mismatched wait_requeue and futex_requeue target futexes
+	o incorrect pairing of futex_wait_requeue_pi with futex_wake
+	  - and the futex_wait with futex_requeue_pi
+	  -http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=2bc872036e1c5948b5b02942810bbdd8dbdb9812
+	o http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=0729e196147692d84d4c099fcff056eba2ed61d8
+
+	Syscalls Exercised
+	------------------
+	futex_wait_requeue_pi
+	futex_requeue
+	futex_lock_pi
+	futex_unlock_pi
+
+pi_lock/*
+	Exercise the FUTEX_LOCK_PI and FUTEX_UNLOCK_PI op codes, under every
+	possible combination of the following scenarious:
+
+	o shared and private futexes
+	o CLOCK_MONOTONIC and CLOCK_REALTIME timeouts (and none)
+	o Signal handling
+	o correct and incorrect settings for val
+	o bogus uaddrs
+	o contended and uncontended cases
+	o OWNERDIED reclaim of mutex
+
+	Error and Misuse Cases
+	----------------------
+	o pi_unlock of a non-pi-locked futex
+	o pi_lock of an owned non-pi futex
+	o unmapped shared futex fault handling
+	o mismatched futex_lock_pi and futex_wake(_op)? calls
+	o mismatched futex_wait and futex_unlock_pi calls
+
+	Syscalls Exercised
+	------------------
+	futex_lock_pi
+	futex_unlock_pi
+	futex_wait
+	futex_wake
+	futex_wake_op
+
+requeue/*
+	Exercise the FUTEX_WAIT and the FUTEX_CMP_REQUEUE op codes.  Perform
+	basic testing for FUTEX_REQUEUE, purposefully avoiding its known
+	flaws.
+
+	Error and Misuse Cases
+	----------------------
+
+	Syscalls Exercised
+	------------------
+	futex_wait
+	futex_requeue
+
+wait/*
+	Exercise the FUTEX_WAIT and FUTEX_WAKE op codes.
+
+	Error and Misuse Cases
+	----------------------
+	o spurious wakeup, see ERESTARTSYS lkml thread
+	  - http://lkml.org/lkml/2009/10/10/36
+	  - http://git.kernel.org/?p=linux/kernel/git/tip/linux-2.6-tip.git;a=commit;h=d58e6576b0deec6f0b9ff8450fe282da18c50883
+
+	Syscalls Exercised
+	------------------
+	futex_wait
+	futex_wake
+	futex_wake_op
+
+
+
+Performance Tests
+-----------------
+	o attempt to expose lock contention issues, such as those exposed by
+	  calling futex_wait on an unowned futex
+	o rapid lock and unlock of an uncontended futex
+	o rapid lock and unlock of a heavily conteded futex
+	o attempt to expose bottlenecks imposed by the shared hash-bucket
+	  implementation
+	o attempt to expose real-time scheduling overhead
+
+Stress Tests
+------------
+	o thousands of threads/processes contending on a single futex
+	o thousands of threads/processes on thousands of futexes
+
+Other Thoughts
+--------------
+kernel-side futex fault injection
+	There are a lot of places in futex.c that have to handle faults.  I
+	think some kind of a fault injection system is needed.  This could be
+	enabled via a sysctl or perhaps just configured in to a debug kernel.
+	Running this test suite in a loop would allow us to achieve some
+	statistical confidence in these numerous fault paths.
+
+FUTEX_REQUEUE
+	This op code is deprecated in favor of FUTEX_CMP_REQUEUE.  Do to the
+	unreliable nature of the op code, only very limited testing can be
+	performed.
