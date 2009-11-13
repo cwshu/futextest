@@ -1,8 +1,8 @@
-SUBDIRS = functional performance stress
+SUBDIRS := functional performance stress
 
 .PHONY: all clean
 all:
-	for DIR in $(SUBDIRS); do (cd $$DIR; ${MAKE} all); done
+	for DIR in $(SUBDIRS); do $(MAKE) -C $$DIR $@ ; done
 
 clean:
-	for DIR in $(SUBDIRS); do (cd $$DIR; ${MAKE} clean); done
+	for DIR in $(SUBDIRS); do $(MAKE) -C $$DIR $@ ; done
