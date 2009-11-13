@@ -35,35 +35,35 @@
 echo 
 # requeue pi testing
 # without timeouts
-./futex_requeue_pi
-./futex_requeue_pi -c -b
-./futex_requeue_pi -c -b -l
-./futex_requeue_pi -c -b -o
-./futex_requeue_pi -c -l
-./futex_requeue_pi -c -o
+./futex_requeue_pi $COLOR
+./futex_requeue_pi $COLOR -b
+./futex_requeue_pi $COLOR -b -l
+./futex_requeue_pi $COLOR -b -o
+./futex_requeue_pi $COLOR -l
+./futex_requeue_pi $COLOR -o
 # with timeouts
-./futex_requeue_pi -c -b -l -t 5000
-./futex_requeue_pi -c -l -t 5000
-./futex_requeue_pi -c -b -l -t 500000
-./futex_requeue_pi -c -l -t 500000
-./futex_requeue_pi -c -b -t 5000
-./futex_requeue_pi -c -t 5000
-./futex_requeue_pi -c -b -t 500000
-./futex_requeue_pi -c -t 500000
-./futex_requeue_pi -c -b -o -t 5000
-./futex_requeue_pi -c -l -t 5000
-./futex_requeue_pi -c -b -o -t 500000
-./futex_requeue_pi -c -l -t 500000
+./futex_requeue_pi $COLOR -b -l -t 5000
+./futex_requeue_pi $COLOR -l -t 5000
+./futex_requeue_pi $COLOR -b -l -t 500000
+./futex_requeue_pi $COLOR -l -t 500000
+./futex_requeue_pi $COLOR -b -t 5000
+./futex_requeue_pi $COLOR -t 5000
+./futex_requeue_pi $COLOR -b -t 500000
+./futex_requeue_pi $COLOR -t 500000
+./futex_requeue_pi $COLOR -b -o -t 5000
+./futex_requeue_pi $COLOR -l -t 5000
+./futex_requeue_pi $COLOR -b -o -t 500000
+./futex_requeue_pi $COLOR -l -t 500000
 # with long timeout
-./futex_requeue_pi -c -b -l -t 2000000000
-./futex_requeue_pi -c -l -t 2000000000
+./futex_requeue_pi $COLOR -b -l -t 2000000000
+./futex_requeue_pi $COLOR -l -t 2000000000
 
 
 echo 
-./futex_requeue_pi_mismatched_ops -c
+./futex_requeue_pi_mismatched_ops $COLOR
 
 echo 
-./futex_requeue_pi_signal_restart -c
+./futex_requeue_pi_signal_restart $COLOR
 
 echo 
-./futex_wait_timeout -c
+./futex_wait_timeout $COLOR

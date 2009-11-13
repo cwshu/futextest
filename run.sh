@@ -33,6 +33,14 @@
 #
 ###############################################################################
 
+COLOR=""
+tput setf 7
+if [ $? -eq 0 ]; then
+    COLOR="-c"
+    tput sgr0
+fi
+export COLOR
+
 (cd functional; ./run.sh)
 (cd performance; ./run.sh)
 (cd stress; ./run.sh)
