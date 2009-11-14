@@ -85,14 +85,11 @@ int main(int argc, char *argv[])
 	to.tv_nsec = timeout_ns;
 	info("Calling futex_wait on f1: %u @ %p\n", f1, &f1);
 	ret = futex_wait(&f1, f1, &to, FUTEX_PRIVATE_FLAG);
-	if (ret < 0) {
-		ret = -errno;
-		if (ret == -ETIMEDOUT)
-			ret = 0;
-		else
-			error("futex_wait", errno);
-	}
+	if (ret < 0 && errno == ETIMEDOUT)
+		ret = 0;
+	else
+		fail("futex_wait returned %d\n", ret < 0 ? errno : ret);
 
-	printf("Result: %s\n", ret ? ERROR : PASS);
+	printf("Result: %s\n", ret ? FAIL : PASS);
 	return ret;
 }
