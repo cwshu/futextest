@@ -67,3 +67,6 @@ echo
 
 echo 
 ./futex_wait_timeout $COLOR
+
+echo
+./futex_wait_wouldblock $COLOR
