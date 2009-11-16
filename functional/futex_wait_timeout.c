@@ -80,9 +80,10 @@ int main(int argc, char *argv[])
 	printf("%s: Block on a futex and wait for timeout\n", basename(argv[0]));
 	printf("\tArguments: timeout=%ldns\n", timeout_ns);
 
-	/* 100us relative timeout */
+	/* initialize timeout */
 	to.tv_sec = 0;
 	to.tv_nsec = timeout_ns;
+
 	info("Calling futex_wait on f1: %u @ %p\n", f1, &f1);
 	ret = futex_wait(&f1, f1, &to, FUTEX_PRIVATE_FLAG);
 	if (ret < 0 && errno == ETIMEDOUT)
