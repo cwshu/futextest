@@ -169,12 +169,18 @@ void *waiterfn(void *arg)
 	/* cond_wait */
 	old_val = wait_q;
 	pthread_barrier_wait(&waiter_barrier);
+	info("Calling futex_wait_requeue_pi: %p (%u) -> %p\n",
+	     &wait_q, wait_q, &(mutex.__data.__lock));
 	ret = futex_wait_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock),
 				    args->timeout, FUTEX_PRIVATE_FLAG);
 	info("waiter %ld woke\n", args->id);
 	if (ret < 0) {
-		ret = -errno;
-		error("waiterfn\n", errno);
+		if (args->timeout && errno == ETIMEDOUT)
+			ret = 0;
+		else {
+			ret = -errno;
+			error("futex_wait_requeue_pi\n", errno);
+		}
 		pthread_mutex_lock(&mutex);
 	}
 	waiters_woken++;
@@ -193,7 +199,7 @@ void *broadcast_wakerfn(void *arg)
 	int ret = 0;
 	pthread_barrier_wait(&waiter_barrier);
 	usleep(100000); /*icky*/
-	fprintf(stderr, "\tWaker: Calling broadcast\n");
+	info("Waker: Calling broadcast\n");
 
 	if (lock) {
 		info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
@@ -298,10 +304,13 @@ int unit_test(int broadcast, long lock, int third_party_owner, long timeout_ns)
 	long i;
 
 	if (timeout_ns) {
+		info("timeout_ns = %ld\n", timeout_ns);
 		ret = clock_gettime(CLOCK_MONOTONIC, &ts);
 		time_t secs = (ts.tv_nsec + timeout_ns) / 1000000000;
-		ts.tv_nsec = (ts.tv_nsec + timeout_ns) % 1000000000;
+		ts.tv_nsec = ((int64_t)ts.tv_nsec + timeout_ns) % 1000000000;
 		ts.tv_sec += secs;
+		info("ts.tv_sec  = %ld\n", ts.tv_sec);
+		info("ts.tv_nsec = %ld\n", ts.tv_nsec);
 		tsp = &ts;
 	}
 
