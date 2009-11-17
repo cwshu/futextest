@@ -54,11 +54,11 @@
 #define THREAD_MAX 10
 #define SIGNAL_PERIOD_US 100
 
-pthread_mutex_t mutex;
 pthread_barrier_t wake_barrier;
 pthread_barrier_t waiter_barrier;
 int waiters_woken;
-futex_t wait_q = FUTEX_INITIALIZER;
+futex_t f1 = FUTEX_INITIALIZER;
+futex_t f2 = FUTEX_INITIALIZER;
 
 /* Test option defaults */
 static long timeout_ns = 0;
@@ -82,41 +82,6 @@ void usage(char *prog)
 	printf("  -t N	Timeout in nanoseconds (default: 100,000)\n");
 	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
 	       VQUIET, VCRITICAL, VINFO);
-}
-
-int create_pi_mutex(pthread_mutex_t *mutex)
-{
-	int ret;
-	pthread_mutexattr_t mutexattr;
-
-	if ((ret = pthread_mutexattr_init(&mutexattr)) != 0) {
-		error("pthread_mutexattr_init\n", ret);
-		return -1;
-	}
-	if ((ret = pthread_mutexattr_setprotocol(&mutexattr, PTHREAD_PRIO_INHERIT)) != 0) {
-		error("pthread_mutexattr_setprotocol", ret);
-		pthread_mutexattr_destroy(&mutexattr);
-		return -1;
-	}
-	if ((ret = pthread_mutexattr_setpshared(&mutexattr, PSHARED)) != 0) {
-		error("pthread_mutexattr_setpshared(%d)\n", ret, PSHARED);
-		pthread_mutexattr_destroy(&mutexattr);
-		return -1;
-	}
-
-	int pshared;
-	pthread_mutexattr_getpshared(&mutexattr, &pshared);
-	info("pshared set to %d\n", pshared);
-
-	if ((ret = pthread_mutex_init(mutex, &mutexattr)) != 0) {
-		error("pthread_mutex_init", ret);
-		pthread_mutexattr_destroy(&mutexattr);
-		return -1;
-	}
-
-	info("mutex.__data.__kind: %x\n", mutex->__data.__kind);
-
-	return 0;
 }
 
 int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy, int prio)
@@ -167,11 +132,11 @@ void *waiterfn(void *arg)
 	/* FIXME: need to hold the mutex prior to waiting right?... sort of... */
 
 	/* cond_wait */
-	old_val = wait_q;
+	old_val = f1;
 	pthread_barrier_wait(&waiter_barrier);
 	info("Calling futex_wait_requeue_pi: %p (%u) -> %p\n",
-	     &wait_q, wait_q, &(mutex.__data.__lock));
-	ret = futex_wait_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock),
+	     &f1, f1, &f2);
+	ret = futex_wait_requeue_pi(&f1, old_val, &f2,
 				    args->timeout, FUTEX_PRIVATE_FLAG);
 	info("waiter %ld woke\n", args->id);
 	if (ret < 0) {
@@ -181,10 +146,10 @@ void *waiterfn(void *arg)
 			ret = -errno;
 			error("futex_wait_requeue_pi\n", errno);
 		}
-		pthread_mutex_lock(&mutex);
+		futex_lock_pi(&f2, NULL, 0, FUTEX_PRIVATE_FLAG);
 	}
 	waiters_woken++;
-	pthread_mutex_unlock(&mutex);
+	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
 	info("Waiter %ld: exiting with %d\n", args->id, ret);
 	return (void*)(long)ret;
@@ -203,12 +168,12 @@ void *broadcast_wakerfn(void *arg)
 
 	if (lock) {
 		info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
-		     mutex.__data.__lock, &mutex.__data.__lock);
-		pthread_mutex_lock(&mutex);
+		     f2, &f2);
+		futex_lock_pi(&f2, NULL, 0, FUTEX_PRIVATE_FLAG);
 	}
 	/* cond_broadcast */
-	old_val = wait_q;
-	ret = futex_cmp_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock), nr_wake,
+	old_val = f1;
+	ret = futex_cmp_requeue_pi(&f1, old_val, &f2, nr_wake,
 				   nr_requeue, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
 		ret = -errno;
@@ -219,7 +184,7 @@ void *broadcast_wakerfn(void *arg)
 		error("broadcast_wakerfn\n", errno);
 
 	if (lock)
-		pthread_mutex_unlock(&mutex);
+		futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
 	info("Waker: exiting with %d\n", ret);
 	return (void *)(long)ret;;
@@ -241,23 +206,23 @@ void *signal_wakerfn(void *arg)
 		     task_count, waiters_woken);
 		if (lock) {
 			info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", 
-			     mutex.__data.__lock, &mutex.__data.__lock);
-			pthread_mutex_lock(&mutex);
+			     f2, &f2);
+			futex_lock_pi(&f2, NULL, 0, FUTEX_PRIVATE_FLAG);
 		}
 		info("Waker: Calling signal\n");
 		/* cond_signal */
-		old_val = wait_q;
-		ret = futex_cmp_requeue_pi(&wait_q, old_val, &(mutex.__data.__lock),
+		old_val = f1;
+		ret = futex_cmp_requeue_pi(&f1, old_val, &f2,
 					   nr_wake, nr_requeue, FUTEX_PRIVATE_FLAG);
 		if (ret < 0)
 			ret = -errno;
-		info("futex: %x\n", mutex.__data.__lock);
+		info("futex: %x\n", f2);
 		if (lock) {
 			info("Calling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", 
-			     mutex.__data.__lock, &mutex.__data.__lock);
-			pthread_mutex_unlock(&mutex);
+			     f2, &f2);
+			futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 		}
-		info("futex: %x\n", mutex.__data.__lock);
+		info("futex: %x\n", f2);
 		if (ret < 0) {
 			error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
 			break;
@@ -287,10 +252,10 @@ void *signal_wakerfn(void *arg)
 
 void *third_party_blocker(void *arg)
 {
-	pthread_mutex_lock(&mutex);
+	futex_lock_pi(&f2, NULL, 0, FUTEX_PRIVATE_FLAG);
 	if (pthread_barrier_wait(&wake_barrier) == -EINVAL)
 		error("third_party_blocker\n", errno);
-	pthread_mutex_unlock(&mutex);
+	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 	return NULL;
 }
 
@@ -407,11 +372,6 @@ int main(int argc, char *argv[])
 	printf("%s: Test requeue functionality\n", basename(argv[0]));
 	printf("\tArguments: broadcast=%d locked=%d owner=%d timeout=%ldns\n",
 	       broadcast, locked, owner, timeout_ns);
-
-	if ((ret = create_pi_mutex(&mutex)) != 0) {
-		error("Creating pi mutex failed\n", ret);
-		exit(1);
-	}
 
 	/*
 	 * FIXME: unit_test is obsolete now that we parse options and the
