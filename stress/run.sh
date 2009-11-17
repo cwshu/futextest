@@ -32,4 +32,16 @@
 #
 ###############################################################################
 
+# Test for a color capable console
+if [ -z "$USE_COLOR" ]; then
+    tput setf 7
+    if [ $? -eq 0 ]; then
+        USE_COLOR=1
+        tput sgr0
+    fi
+fi
+if [ "$USE_COLOR" -eq 1 ]; then
+    COLOR="-c"
+fi
+
 exit 0

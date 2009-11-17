@@ -33,13 +33,14 @@
 #
 ###############################################################################
 
-COLOR=""
+# Test for a color capable shell and pass the result to the subdir scripts
+USE_COLOR=0
 tput setf 7
 if [ $? -eq 0 ]; then
-    COLOR="-c"
+    USE_COLOR=1
     tput sgr0
 fi
-export COLOR
+export USE_COLOR
 
 (cd functional; ./run.sh)
 (cd performance; ./run.sh)
