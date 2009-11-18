@@ -37,6 +37,7 @@
 #include <string.h>
 #include <time.h>
 #include "futextest.h"
+#include "logging.h"
 
 static long timeout_ns = 100000;	/* 100us default timeout */
 
@@ -60,7 +61,7 @@ int main(int argc, char *argv[])
 	while ((c = getopt(argc, argv, "cht:v:")) != -1) {
 		switch(c) {
 		case 'c':
-			futextest_use_color(1);
+			log_color(1);
 			break;
 		case 'h':
 			usage(basename(argv[0]));
@@ -69,7 +70,7 @@ int main(int argc, char *argv[])
 			timeout_ns = atoi(optarg);
 			break;
 		case 'v':
-			futextest_verbosity(atoi(optarg));
+			log_verbosity(atoi(optarg));
 			break;
 		default:
 			usage(basename(argv[0]));

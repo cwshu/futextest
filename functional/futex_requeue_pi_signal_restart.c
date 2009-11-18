@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "futextest.h"
+#include "logging.h"
 
 futex_t f1 = FUTEX_INITIALIZER;
 futex_t f2 = FUTEX_INITIALIZER;
@@ -132,13 +133,13 @@ int main(int argc, char *argv[])
 	while ((c = getopt(argc, argv, "chv:")) != -1) {
 		switch(c) {
 		case 'c':
-			futextest_use_color(1);
+			log_color(1);
 			break;
 		case 'h':
 			usage(basename(argv[0]));
 			exit(0);
 		case 'v':
-			futextest_verbosity(atoi(optarg));
+			log_verbosity(atoi(optarg));
 			break;
 		default:
 			usage(basename(argv[0]));

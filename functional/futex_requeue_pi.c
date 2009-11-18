@@ -41,21 +41,14 @@
 #include <signal.h>
 #include <string.h>
 #include "futextest.h"
-
-#define PRIVATE 1
-#ifdef PRIVATE
-#define FUTEX_PRIVATE_FLAG 128
-#define PSHARED PTHREAD_PROCESS_PRIVATE
-#else
-#define FUTEX_PRIVATE_FLAG 0
-#define PSHARED PTHREAD_PROCESS_SHARED
-#endif
+#include "logging.h"
 
 #define THREAD_MAX 10
 #define SIGNAL_PERIOD_US 100
 
 pthread_barrier_t wake_barrier;
 pthread_barrier_t waiter_barrier;
+volatile int waiters_blocked = 0;
 int waiters_woken;
 futex_t f1 = FUTEX_INITIALIZER;
 futex_t f2 = FUTEX_INITIALIZER;
@@ -346,7 +339,7 @@ int main(int argc, char *argv[])
 			broadcast = 1;
 			break;
 		case 'c':
-			futextest_use_color(1);
+			log_color(1);
 			break;
 		case 'h':
 			usage(basename(argv[0]));
@@ -361,7 +354,7 @@ int main(int argc, char *argv[])
 			timeout_ns = atoi(optarg);
 			break;
 		case 'v':
-			futextest_verbosity(atoi(optarg));
+			log_verbosity(atoi(optarg));
 			break;
 		default:
 			usage(basename(argv[0]));
