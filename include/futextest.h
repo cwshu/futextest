@@ -119,8 +119,8 @@ int _verbose = VCRITICAL;
  * futex_wake() - wake one or more tasks blocked on uaddr
  * @nr_wake:	wake up to this many tasks
  */
-#define futex_wake(uaddr, val, nr_wake, opflags) \
-	futex(uaddr, FUTEX_WAKE, val, NULL, NULL, nr_wake, opflags)
+#define futex_wake(uaddr, nr_wake, opflags) \
+	futex(uaddr, FUTEX_WAKE, nr_wake, NULL, NULL, 0, opflags)
 
 /**
  * futex_wait_bitset() - block on uaddr with bitset
@@ -133,8 +133,8 @@ int _verbose = VCRITICAL;
  * futex_wake_bitset() - wake one or more tasks blocked on uaddr with bitset
  * @bitset:	bitset to compare with that used in futex_wait_bitset
  */
-#define futex_wake_bitset(uaddr, val, nr_wake, bitset, opflags) \
-	futex(uaddr, FUTEX_WAKE_BITSET, val, NULL, NULL, bitset, opflags)
+#define futex_wake_bitset(uaddr, nr_wake, bitset, opflags) \
+	futex(uaddr, FUTEX_WAKE_BITSET, nr_wake, NULL, NULL, bitset, opflags)
 
 /**
  * futex_lock_pi() - block on uaddr as a PI mutex

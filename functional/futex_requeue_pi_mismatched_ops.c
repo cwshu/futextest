@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 			 * requeue_pi target and aborted. Wake the child with
 			 * FUTEX_WAKE.
 			 */
-			ret = futex_wake(&f1, f1, 1, FUTEX_PRIVATE_FLAG);
+			ret = futex_wake(&f1, 1, FUTEX_PRIVATE_FLAG);
 			if (ret == 1)
 				ret = 0;
 			else if (ret < 0)
