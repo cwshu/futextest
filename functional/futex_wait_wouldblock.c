@@ -21,7 +21,7 @@
  *
  * DESCRIPTION
  *      Test if FUTEX_WAIT op returns -EWOULDBLOCK if the futex value differs
- *      from the unexpected one.
+ *      from the expected one.
  *
  * AUTHOR
  *      Gowrishankar <gowrishankar.m@in.ibm.com>
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 {
 	struct timespec to = {.tv_sec = 0, .tv_nsec = timeout_ns};
 	futex_t f1 = FUTEX_INITIALIZER;
-	int ret = 0;
+	int res, ret = RET_PASS;
 	int c;
 
 	while ((c = getopt(argc, argv, "cht:v:")) != -1) {
@@ -79,19 +79,13 @@ int main(int argc, char *argv[])
 	       basename(argv[0]));
 
 	info("Calling futex_wait on f1: %u @ %p with val=%u\n", f1, &f1, f1+1);
-	ret = futex_wait(&f1, f1, &to, FUTEX_PRIVATE_FLAG);
-	if (ret < 0) {
-		ret = -errno;
-		if (ret == -EWOULDBLOCK)
-			ret = 0;
-		else
-			fail("returned error is not '%s' in FUTEX_WAIT, but '%s'\n", \
-			     strerror(EWOULDBLOCK), strerror(errno));
-	} else {
-		fail("futex_wait returned %d\n", ret);
-		ret = -1;
+	res = futex_wait(&f1, f1+1, &to, FUTEX_PRIVATE_FLAG);
+	if (!res || errno != EWOULDBLOCK) {
+		fail("futex_wait returned: %d %s\n",
+		     res ? errno : res, res ? strerror(errno) : "");
+		ret = RET_FAIL;
 	}
 
-	printf("Result: %s\n", ret ? FAIL : PASS);
+	print_result(ret);
 	return ret;
 }

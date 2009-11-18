@@ -66,6 +66,11 @@ char *FAIL = FAIL_NORMAL;
 #define VMAX      VINFO
 int _verbose = VCRITICAL;
 
+/* Functional test return codes */
+#define RET_PASS   0
+#define RET_ERROR -1
+#define RET_FAIL  -2
+
 /**
  * log_color() - Use colored output for PASS, ERROR, and FAIL strings
  * @use_color:	use color (1) or not (0)
@@ -99,7 +104,30 @@ void log_verbosity(int level)
 	_verbose = level;
 }
 
-/* Output macros */
+/**
+ * print_result() - Print standard PASS | ERROR | FAIL results
+ * @ret:	the return value to be considered: 0 | RET_ERROR | RET_FAIL
+ *
+ * print_result() is primarily intended for functional tests.
+ */
+void print_result(int ret)
+{
+	char *result = "Unknown return code";
+	switch (ret) {
+	case RET_PASS:
+		result = PASS;
+		break;
+	case RET_ERROR:
+		result = ERROR;
+		break;
+	case RET_FAIL:
+		result = FAIL;
+		break;
+	}
+	printf("Result: %s\n", result);
+}
+
+/* log level macros */
 #define info(message, vargs...) \
 do { \
 	if (_verbose >= VINFO) \

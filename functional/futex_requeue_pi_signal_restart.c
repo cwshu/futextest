@@ -50,6 +50,8 @@ typedef struct struct_waiter_arg {
 	struct timespec *timeout;
 } waiter_arg_t;
 
+int waiter_ret = 0;
+
 void usage(char *prog)
 {
 	printf("Usage: %s\n", prog);
@@ -99,27 +101,28 @@ void handle_signal(int signo)
 void *waiterfn(void *arg)
 {
 	unsigned int old_val;
-	int ret;
+	int res;
+	waiter_ret = RET_PASS;
 
 	info("Waiter running\n"); 
 
 	info("Calling FUTEX_LOCK_PI on f2=%x @ %p\n", f2, &f2);
 	/* cond_wait */
 	old_val = f1;
-	ret = futex_wait_requeue_pi(&f1, old_val, &(f2), NULL, FUTEX_PRIVATE_FLAG);
-	if (ret < 0) {
-		ret = -errno;
+	res = futex_wait_requeue_pi(&f1, old_val, &(f2), NULL, FUTEX_PRIVATE_FLAG);
+	if (res < 0) {
 		error("waiterfn\n", errno);
+		waiter_ret = RET_ERROR;
 	}
-	info("FUTEX_WAIT_REQUEUE_PI returned: %d\n", ret);
+	info("FUTEX_WAIT_REQUEUE_PI returned: %d\n", res);
 	info("w1:futex: %x\n", f2);
-	if (ret)
+	if (res)
 		futex_lock_pi(&f2, 0, 0, FUTEX_PRIVATE_FLAG);
 	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
-	info("Waiter exiting with %d\n", ret);
+	info("Waiter exiting with %d\n", waiter_ret);
 	info("w2:futex: %x\n", f2);
-	return (void*)(long)ret;
+	pthread_exit(NULL);
 }
 
 
@@ -128,7 +131,7 @@ int main(int argc, char *argv[])
 	unsigned int old_val;
 	struct sigaction sa;
 	pthread_t waiter;
-	int c, ret = 0;
+	int c, res, ret = RET_PASS;
 
 	while ((c = getopt(argc, argv, "chv:")) != -1) {
 		switch(c) {
@@ -160,9 +163,10 @@ int main(int argc, char *argv[])
 
 	info("m1:futex: %x\n", f2);
 	info("Creating waiter\n");
-	if ((ret = create_rt_thread(&waiter, waiterfn, NULL, SCHED_FIFO, 1))) {
-		error("Creating waiting thread failed", ret);
-		exit(1);
+	if ((res = create_rt_thread(&waiter, waiterfn, NULL, SCHED_FIFO, 1))) {
+		error("Creating waiting thread failed", res);
+		ret = RET_ERROR;
+		goto out;
 	}
 	info("m2:futex: %x\n", f2);
 
@@ -174,13 +178,11 @@ int main(int argc, char *argv[])
 	info("Waking waiter via FUTEX_CMP_REQUEUE_PI\n");
 	/* cond_signal */
 	old_val = f1;
-	ret = futex_cmp_requeue_pi(&f1, old_val, &(f2),
+	res = futex_cmp_requeue_pi(&f1, old_val, &(f2),
 				   1, 0, FUTEX_PRIVATE_FLAG);
-	if (ret < 0) {
-		ret = -errno;
+	if (res < 0) {
 		error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
-		
-		/* FIXME - do something sane.... */
+		ret = RET_ERROR;
 	}
 	info("m4:futex: %x\n", f2); 
 
@@ -206,6 +208,10 @@ int main(int argc, char *argv[])
 	pthread_join(waiter, NULL);
 	info("m7:futex: %x\n", f2);
 
-	printf("Result: %s\n", ret ? ERROR : PASS);
+ out:
+	if (ret == RET_PASS && waiter_ret)
+		ret = waiter_ret;
+
+	print_result(ret);
 	return ret;
 }
