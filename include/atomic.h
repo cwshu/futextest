@@ -43,36 +43,36 @@ typedef struct {
  * @oldval:	The expected value of the futex
  * @newval:	The new value to try and assign the futex
  *
- * Implement cmpxchg using gcc atomic builtins.
+ * Return the old value of addr->val.
  */
-static inline void
+static inline int
 atomic_cmpxchg(atomic_t *addr, int oldval, int newval)
 {
-	__sync_val_compare_and_swap(&addr->val, oldval, newval);
+	return __sync_val_compare_and_swap(&addr->val, oldval, newval);
 }
 
 /**
  * atomic_inc() - Atomic incrememnt
  * @addr:	Address of the variable to increment
  *
- * Return the new value of *addr;
+ * Return the new value of addr->val.
  */
-static inline void
+static inline int
 atomic_inc(atomic_t *addr)
 {
-	__sync_add_and_fetch(&addr->val, 1);
+	return __sync_add_and_fetch(&addr->val, 1);
 }
 
 /**
  * atomic_dec() - Atomic decrement
  * @addr:	Address of the variable to decrement
  *
- * Return the new value of *addr;
+ * Return the new value of addr-val.
  */
-static inline void
+static inline int
 atomic_dec(atomic_t *addr)
 {
-	__sync_sub_and_fetch(&addr->val, 1);
+	return __sync_sub_and_fetch(&addr->val, 1);
 }
 
 /**
@@ -80,10 +80,11 @@ atomic_dec(atomic_t *addr)
  * @addr:	Address of the variable to set
  * @newval:	New value for the atomic_t
  *
- * Return the new value of *addr;
+ * Return the new value of addr->val.
  */
-static inline void
+static inline int
 atomic_set(atomic_t *addr, int newval)
 {
 	addr->val = newval;
+	return newval;
 }

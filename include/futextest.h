@@ -212,7 +212,7 @@ futex_cmp_requeue_pi(futex_t *uaddr, futex_t val, futex_t *uaddr2, int nr_wake,
 }
 
 /**
- * futex_cmpxchg() - Atomic compare and exchange
+ * futex_cmpxchg() - atomic compare and exchange
  * @uaddr:	The address of the futex to be modified
  * @oldval:	The expected value of the futex
  * @newval:	The new value to try and assign the futex
@@ -224,4 +224,35 @@ static inline futex_t
 futex_cmpxchg(futex_t *uaddr, u_int32_t oldval, u_int32_t newval)
 {
 	return __sync_val_compare_and_swap(uaddr, oldval, newval);
+}
+
+/**
+ * futex_dec() - atomic decrement of the futex value
+ * @uaddr:	The address of the futex to be modified
+ */
+static inline void
+futex_dec(futex_t *uaddr)
+{
+	__sync_sub_and_fetch(uaddr, 1);
+}
+
+/**
+ * futex_inc() - atomic increment of the futex value
+ * @uaddr:	the address of the futex to be modified
+ */
+static inline void
+futex_inc(futex_t *uaddr)
+{
+	__sync_add_and_fetch(uaddr, 1);
+}
+
+/**
+ * futex_set() - atomic decrement of the futex value
+ * @uaddr:	the address of the futex to be modified
+ * @newval:	New value for the atomic_t
+ */
+static inline void
+futex_set(futex_t *uaddr, u_int32_t newval)
+{
+	*uaddr = newval;
 }

@@ -19,11 +19,6 @@ struct locktest_shared {
 	futex_t futex;
 };
 
-static inline void decrement(futex_t *ptr)
-{
-	__sync_fetch_and_add(ptr, -1);
-}
-
 /* Called by main thread to initialize barrier */
 static void barrier_init(struct thread_barrier *barrier, int threads)
 {
@@ -34,7 +29,7 @@ static void barrier_init(struct thread_barrier *barrier, int threads)
 /* Called by worker threads to synchronize with main thread */
 static void barrier_sync(struct thread_barrier *barrier)
 {
-	decrement(&barrier->threads);
+	futex_dec(&barrier->threads);
 	if (barrier->threads == 0)
 		futex_wake(&barrier->threads, 1, FUTEX_PRIVATE_FLAG);
 	while (barrier->unblock == 0)
