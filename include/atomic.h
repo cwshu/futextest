@@ -31,6 +31,9 @@
  *
  *****************************************************************************/
 
+#ifndef _ATOMIC_H
+#define _ATOMIC_H
+
 typedef struct {
 	volatile int val;
 } atomic_t;
@@ -88,3 +91,5 @@ atomic_set(atomic_t *addr, int newval)
 	addr->val = newval;
 	return newval;
 }
+
+#endif

@@ -30,6 +30,9 @@
  *
  *****************************************************************************/
 
+#ifndef _LOGGING_H
+#define _LOGGING_H
+
 #include <unistd.h>
 #include <linux/futex.h>
 
@@ -150,3 +153,5 @@ do { \
 	if (_verbose >= VCRITICAL) \
 		fprintf(stderr, "\t%s: "message, FAIL, ##args); \
 } while (0)
+
+#endif

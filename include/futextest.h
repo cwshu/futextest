@@ -30,6 +30,9 @@
  *
  *****************************************************************************/
 
+#ifndef _FUTEXTEST_H
+#define _FUTEXTEST_H
+
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -256,3 +259,5 @@ futex_set(futex_t *uaddr, u_int32_t newval)
 {
 	*uaddr = newval;
 }
+
+#endif
