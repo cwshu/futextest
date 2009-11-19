@@ -1,6 +1,8 @@
 functional/futex_requeue_pi
 functional/futex_requeue_pi_signal_restart
 functional/futex_wait_timeout
-
 functional/futex_requeue_pi_mismatched_ops
 functional/futex_wait_wouldblock
+
+performance/futex_wait
+performance/futex_set_wait

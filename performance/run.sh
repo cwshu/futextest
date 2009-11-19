@@ -44,5 +44,6 @@ if [ "$USE_COLOR" -eq 1 ]; then
     COLOR="-c"
 fi
 
+./futex_wait
 
 exit 0

@@ -3,7 +3,7 @@ CFLAGS := $(CFLAGS) -g -O2 -Wall -D_GNU_SOURCE $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -lpthread -lrt
 
 HEADERS := ../include/futextest.h
-TARGETS :=
+TARGETS := futex_wait
 
 .PHONY: all clean
 all: $(TARGETS)
