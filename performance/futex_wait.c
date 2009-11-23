@@ -35,17 +35,12 @@ static inline void futex_cmpxchg_unlock(futex_t *futex)
 	}
 }
 
-static void * futex_wait_test(void * dummy)
+static void futex_wait_test(futex_t *futex, int loops)
 {
-	struct locktest_shared * shared = dummy;
-	int i = shared->loops;
-	barrier_sync(&shared->barrier_before);
-	while (i--) {
-		futex_wait_lock(&shared->futex);
-		futex_cmpxchg_unlock(&shared->futex);
+	while (loops--) {
+		futex_wait_lock(futex);
+		futex_cmpxchg_unlock(futex);
 	}
-	barrier_sync(&shared->barrier_after);
-	return NULL;
 }
 
 int main (void)

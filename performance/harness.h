@@ -15,6 +15,7 @@ struct thread_barrier {
 struct locktest_shared {
 	struct thread_barrier barrier_before;
 	struct thread_barrier barrier_after;
+	void (* locktest_function)(futex_t *ptr, int loops);
 	int loops;
 	futex_t futex;
 };
@@ -27,13 +28,14 @@ static void barrier_init(struct thread_barrier *barrier, int threads)
 }
 
 /* Called by worker threads to synchronize with main thread */
-static void barrier_sync(struct thread_barrier *barrier)
+static int barrier_sync(struct thread_barrier *barrier)
 {
 	futex_dec(&barrier->threads);
 	if (barrier->threads == 0)
 		futex_wake(&barrier->threads, 1, FUTEX_PRIVATE_FLAG);
 	while (barrier->unblock == 0)
 		futex_wait(&barrier->unblock, 0, NULL, FUTEX_PRIVATE_FLAG);
+	return barrier->unblock;
 }
 
 /* Called by main thread to wait for all workers to reach sync point */
@@ -46,14 +48,24 @@ static void barrier_wait(struct thread_barrier *barrier)
 }
 
 /* Called by main thread to unblock worker threads from their sync point */
-static void barrier_unblock(struct thread_barrier *barrier)
+static void barrier_unblock(struct thread_barrier *barrier, int value)
 {
-	barrier->unblock = 1;
+	barrier->unblock = value;
 	futex_wake(&barrier->unblock, INT_MAX, FUTEX_PRIVATE_FLAG);
 }
 
+static void * locktest_thread(void * dummy)
+{
+	struct locktest_shared * shared = dummy;
+	if (barrier_sync(&shared->barrier_before) > 0) {
+		shared->locktest_function(&shared->futex, shared->loops);
+		barrier_sync(&shared->barrier_after);
+	}
+	return NULL;
+}
 
-static void locktest(void * thread_function(void *), int iterations)
+static void locktest(void locktest_function(futex_t * ptr, int loops),
+		     int iterations)
 {
 	int threads[] = { 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32,
 			  64, 128, 256, 512, 1024, 0 };
@@ -70,15 +82,22 @@ static void locktest(void * thread_function(void *), int iterations)
 
 		barrier_init(&shared.barrier_before, num_threads);
 		barrier_init(&shared.barrier_after, num_threads);
+		shared.locktest_function = locktest_function;
 		shared.loops = iterations / num_threads;
 		shared.futex = 0;
 
 		for (i = 0; i < num_threads; i++)
-			pthread_create(thread + i, NULL, thread_function,
-				       &shared);
+			if (pthread_create(thread + i, NULL, locktest_thread,
+					   &shared)) {
+				/* Could not create thread; abort */
+				barrier_unblock(&shared.barrier_before, -1);
+				while (--i >= 0)
+					pthread_join(thread[i], NULL);
+				return;
+			}
 		barrier_wait(&shared.barrier_before);
 		before = times(&tms_before);
-		barrier_unblock(&shared.barrier_before);
+		barrier_unblock(&shared.barrier_before, 1);
 		barrier_wait(&shared.barrier_after);
 		after = times(&tms_after);
 		wall = after - before;
@@ -91,7 +110,7 @@ static void locktest(void * thread_function(void *), int iterations)
 		       (num_threads * shared.loops) / (wall * tick * 1000),
 		       user * tick, system * tick, wall * tick,
 		       wall ? (user + system) * 1. / wall : 1.);
-		barrier_unblock(&shared.barrier_after);
+		barrier_unblock(&shared.barrier_after, 1);
 		for (i = 0; i < num_threads; i++)
 			pthread_join(thread[i], NULL);
 	}
