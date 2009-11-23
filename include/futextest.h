@@ -228,8 +228,10 @@ futex_cmp_requeue_pi(futex_t *uaddr, futex_t val, futex_t *uaddr2, int nr_wake,
  *
  * Implement cmpxchg using gcc atomic builtins.
  * http://gcc.gnu.org/onlinedocs/gcc-4.1.0/gcc/Atomic-Builtins.html
+ *
+ * Return the old futex value.
  */
-static inline futex_t
+static inline u_int32_t
 futex_cmpxchg(futex_t *uaddr, u_int32_t oldval, u_int32_t newval)
 {
 	return __sync_val_compare_and_swap(uaddr, oldval, newval);
@@ -238,32 +240,39 @@ futex_cmpxchg(futex_t *uaddr, u_int32_t oldval, u_int32_t newval)
 /**
  * futex_dec() - atomic decrement of the futex value
  * @uaddr:	The address of the futex to be modified
+ *
+ * Return the new futex value.
  */
-static inline void
+static inline u_int32_t
 futex_dec(futex_t *uaddr)
 {
-	__sync_sub_and_fetch(uaddr, 1);
+	return __sync_sub_and_fetch(uaddr, 1);
 }
 
 /**
  * futex_inc() - atomic increment of the futex value
  * @uaddr:	the address of the futex to be modified
+ *
+ * Return the new futex value.
  */
-static inline void
+static inline u_int32_t
 futex_inc(futex_t *uaddr)
 {
-	__sync_add_and_fetch(uaddr, 1);
+	return __sync_add_and_fetch(uaddr, 1);
 }
 
 /**
  * futex_set() - atomic decrement of the futex value
  * @uaddr:	the address of the futex to be modified
  * @newval:	New value for the atomic_t
+ *
+ * Return the new futex value.
  */
-static inline void
+static inline u_int32_t
 futex_set(futex_t *uaddr, u_int32_t newval)
 {
 	*uaddr = newval;
+	return newval;
 }
 
 #endif
