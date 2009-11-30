@@ -44,6 +44,8 @@ if [ "$USE_COLOR" -eq 1 ]; then
     COLOR="-c"
 fi
 
-./futex_wait
+for THREADS in 1 2 3 4 5 6 8 10 12 16 24 32 64 128 256 512 1024; do
+    ./futex_wait $COLOR -n $THREADS
+done
 
 exit 0
