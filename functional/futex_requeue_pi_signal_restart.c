@@ -20,8 +20,9 @@
  *      requeue_pi_sig_restart.c
  *
  * DESCRIPTION
- *      This test exercises the futex_wait_requeue_pi signal restart after a
- *      deliberate wake-up.
+ *      This test exercises the futex_wait_requeue_pi() signal handling both
+ *      before and after the requeue. The first should be restarted by the
+ *      kernel. The latter should return EWOULDBLOCK to the waiter.
  *
  * AUTHORS
  *      Darren Hart <dvhltc@us.ibm.com>
@@ -39,11 +40,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "atomic.h"
 #include "futextest.h"
 #include "logging.h"
 
 futex_t f1 = FUTEX_INITIALIZER;
 futex_t f2 = FUTEX_INITIALIZER;
+atomic_t requeued = ATOMIC_INITIALIZER;
+atomic_t waiter_running = ATOMIC_INITIALIZER;
 
 typedef struct struct_waiter_arg {
 	long id;
@@ -95,7 +99,8 @@ int create_rt_thread(pthread_t *pth, void*(*func)(void*), void *arg, int policy,
 
 void handle_signal(int signo)
 {
-	info("handled signal: %d\n", signo);
+	info("signal received %s requeue\n", 
+	     requeued.val ? "after" : "prior to");
 }
 
 void *waiterfn(void *arg)
@@ -104,24 +109,20 @@ void *waiterfn(void *arg)
 	int res;
 	waiter_ret = RET_PASS;
 
-	info("Waiter running\n"); 
-
+	info("Waiter running\n");
 	info("Calling FUTEX_LOCK_PI on f2=%x @ %p\n", f2, &f2);
-	/* cond_wait */
+	atomic_set(&waiter_running, 1);
 	old_val = f1;
 	res = futex_wait_requeue_pi(&f1, old_val, &(f2), NULL, FUTEX_PRIVATE_FLAG);
-	if (res < 0) {
-		error("waiterfn\n", errno);
+	if (!requeued.val || errno != EWOULDBLOCK) {
+		error("unexpected return from futex_wait_requeue_pi\n", errno);
+		info("w2:futex: %x\n", f2);
+		if (!res)
+			futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 		waiter_ret = RET_ERROR;
 	}
-	info("FUTEX_WAIT_REQUEUE_PI returned: %d\n", res);
-	info("w1:futex: %x\n", f2);
-	if (res)
-		futex_lock_pi(&f2, 0, 0, FUTEX_PRIVATE_FLAG);
-	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
 	info("Waiter exiting with %d\n", waiter_ret);
-	info("w2:futex: %x\n", f2);
 	pthread_exit(NULL);
 }
 
@@ -161,52 +162,66 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	info("m1:futex: %x\n", f2);
+	info("m1:f2: %x\n", f2);
 	info("Creating waiter\n");
 	if ((res = create_rt_thread(&waiter, waiterfn, NULL, SCHED_FIFO, 1))) {
 		error("Creating waiting thread failed", res);
 		ret = RET_ERROR;
 		goto out;
 	}
-	info("m2:futex: %x\n", f2);
 
-	info("Calling FUTEX_LOCK_PI on mutex=%x @ %p\n", f2, &f2);
-	
+	info("Calling FUTEX_LOCK_PI on f2=%x @ %p\n", f2, &f2);
+	info("m2:f2: %x\n", f2);
 	futex_lock_pi(&f2, 0, 0, FUTEX_PRIVATE_FLAG);
-	info("m3:futex: %x\n", f2);
+	info("m3:f2: %x\n", f2);
+
+	/* wait for the waiter to start running, then give it time to block */
+	while (!waiter_running.val)
+		usleep(100);
+	usleep(100);
+
+	/* 
+	 * signal the waiter before requeue, waiter should automatically
+	 * restart futex_wait_requeue_pi() in the kernel.
+	 */
+	info("Issuing SIGUSR1 to waiter\n"); 
+	pthread_kill(waiter, SIGUSR1);
 
 	info("Waking waiter via FUTEX_CMP_REQUEUE_PI\n");
-	/* cond_signal */
-	old_val = f1;
-	res = futex_cmp_requeue_pi(&f1, old_val, &(f2),
-				   1, 0, FUTEX_PRIVATE_FLAG);
+	while (1) {
+		old_val = f1;
+		res = futex_cmp_requeue_pi(&f1, old_val, &(f2), 1, 0,
+					   FUTEX_PRIVATE_FLAG);
+		if (res)
+			break;
+		error("Waiter was not ready for requeue. First signal was "
+		      "delivered too early\n", 0);
+		usleep(100);
+	}
 	if (res < 0) {
 		error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
 		ret = RET_ERROR;
+	} else {
+		atomic_set(&requeued, 1);
 	}
-	info("m4:futex: %x\n", f2); 
-
-	/* give the waiter time to wake and block on the lock */
-	sleep(2);
-	info("m5:futex: %x\n", f2);
+	info("m4:f2: %x\n", f2); 
 
 	/* 
-	 * signal the waiter to force a syscall restart to
-	 * futex_lock_pi_restart()
+	 * signal the waiter after requeue, waiter should return from
+	 * futex_wait_requeue_pi() with EWOULDBLOCK.
 	 */
 	info("Issuing SIGUSR1 to waiter\n"); 
 	pthread_kill(waiter, SIGUSR1);
 
 	/* give the signal time to get to the waiter */
-	sleep(2);
-	info("m6:futex: %x\n", f2);
+	usleep(100);
 	info("Calling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", f2, &f2);
 	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
 	/* Wait for waiter to finish */
 	info("Waiting for waiter to return\n");
 	pthread_join(waiter, NULL);
-	info("m7:futex: %x\n", f2);
+	info("m5:f2: %x\n", f2);
 
  out:
 	if (ret == RET_PASS && waiter_ret)
