@@ -44,6 +44,8 @@
 #include "futextest.h"
 #include "logging.h"
 
+#define DELAY_US 1000
+
 futex_t f1 = FUTEX_INITIALIZER;
 futex_t f2 = FUTEX_INITIALIZER;
 atomic_t requeued = ATOMIC_INITIALIZER;
@@ -115,11 +117,12 @@ void *waiterfn(void *arg)
 	old_val = f1;
 	res = futex_wait_requeue_pi(&f1, old_val, &(f2), NULL, FUTEX_PRIVATE_FLAG);
 	if (!requeued.val || errno != EWOULDBLOCK) {
-		error("unexpected return from futex_wait_requeue_pi\n", errno);
+		fail("unexpected return from futex_wait_requeue_pi: %d (%s)\n",
+		     res, strerror(errno));
 		info("w2:futex: %x\n", f2);
 		if (!res)
 			futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
-		waiter_ret = RET_ERROR;
+		waiter_ret = RET_FAIL;
 	}
 
 	info("Waiter exiting with %d\n", waiter_ret);
@@ -177,15 +180,17 @@ int main(int argc, char *argv[])
 
 	/* wait for the waiter to start running, then give it time to block */
 	while (!waiter_running.val)
-		usleep(100);
-	usleep(100);
+		usleep(DELAY_US);
+	usleep(DELAY_US);
 
 	/* 
 	 * signal the waiter before requeue, waiter should automatically
-	 * restart futex_wait_requeue_pi() in the kernel.
+	 * restart futex_wait_requeue_pi() in the kernel. Wait for the waiter
+	 * to block on f1 again.
 	 */
 	info("Issuing SIGUSR1 to waiter\n"); 
 	pthread_kill(waiter, SIGUSR1);
+	usleep(DELAY_US);
 
 	info("Waking waiter via FUTEX_CMP_REQUEUE_PI\n");
 	while (1) {
@@ -196,7 +201,8 @@ int main(int argc, char *argv[])
 			break;
 		error("Waiter was not ready for requeue. First signal was "
 		      "delivered too early\n", 0);
-		usleep(100);
+		ret = RET_ERROR;
+		usleep(DELAY_US);
 	}
 	if (res < 0) {
 		error("FUTEX_CMP_REQUEUE_PI failed\n", errno);
@@ -214,7 +220,7 @@ int main(int argc, char *argv[])
 	pthread_kill(waiter, SIGUSR1);
 
 	/* give the signal time to get to the waiter */
-	usleep(100);
+	usleep(DELAY_US);
 	info("Calling FUTEX_UNLOCK_PI on mutex=%x @ %p\n", f2, &f2);
 	futex_unlock_pi(&f2, FUTEX_PRIVATE_FLAG);
 
