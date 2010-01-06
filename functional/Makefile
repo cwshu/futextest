@@ -8,7 +8,9 @@ TARGETS := \
 	futex_wait_wouldblock \
 	futex_requeue_pi \
 	futex_requeue_pi_signal_restart \
-	futex_requeue_pi_mismatched_ops
+	futex_requeue_pi_mismatched_ops \
+	futex_wait_uninitialized_heap \
+	futex_wait_private_mapped_file
 
 .PHONY: all clean
 all: $(TARGETS)

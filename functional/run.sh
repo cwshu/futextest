@@ -29,6 +29,8 @@
 #
 # HISTORY
 #      2009-Nov-9: Initial version by Darren Hart <dvhltc@us.ibm.com>
+#      2010-Jan-6: Add futex_wait_uninitialized_heap and futex_wait_private_mapped_file
+#                  by KOSAKI Motohiro <kosaki.motohiro@jp.fujitsu.com>
 #
 ###############################################################################
 
@@ -83,3 +85,8 @@ echo
 
 echo
 ./futex_wait_wouldblock $COLOR
+
+echo
+./futex_wait_uninitialized_heap $COLOR
+./futex_wait_private_mapped_file $COLOR
+
