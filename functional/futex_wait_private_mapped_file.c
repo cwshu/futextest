@@ -41,6 +41,7 @@
 #include <linux/futex.h>
 #include <pthread.h>
 #include <libgen.h>
+#include <signal.h>
 
 #include "logging.h"
 #include "futextest.h"
@@ -51,16 +52,31 @@ char pad[PAGE_SZ] = {1};
 futex_t val = 1;
 char pad2[PAGE_SZ] = {1};
 
+#define WAKE_WAIT_US 3000000
+struct timespec wait_timeout = { .tv_sec=5, .tv_nsec=0};
+
+void usage(char *prog)
+{
+	printf("Usage: %s\n", prog);
+	printf("  -c	Use color\n");
+	printf("  -h	Display this help message\n");
+	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
+	       VQUIET, VCRITICAL, VINFO);
+}
+
 void* thr_futex_wait(void *arg)
 {
 	int ret;
 
 	info("futex wait\n");
-	ret = futex_wait(&val, 1, NULL, 0);
-	if (ret != 0 && errno != EWOULDBLOCK) {
-		perror("futex error.\n");
+	ret = futex_wait(&val, 1, &wait_timeout, 0);
+	if (ret && errno != EWOULDBLOCK && errno != ETIMEDOUT) {
+		error("futex error.\n", errno);
 		print_result(RET_ERROR);
 		exit(RET_ERROR);
+	}
+	if (ret && errno == ETIMEDOUT) {
+		fail("waiter timedout\n");
 	}
 	info("futex_wait: ret = %d, errno = %d\n", ret, errno);
 
@@ -74,12 +90,19 @@ int main(int argc, char **argv)
 	int res;
 	int c;
 
-	while ((c = getopt(argc, argv, "c")) != -1) {
+	while ((c = getopt(argc, argv, "chv:")) != -1) {
 		switch(c) {
 		case 'c':
 			log_color(1);
 			break;
+		case 'h':
+			usage(basename(argv[0]));
+			exit(0);
+		case 'v':
+			log_verbosity(atoi(optarg));
+			break;
 		default:
+			usage(basename(argv[0]));
 			exit(1);
 		}
 	}
@@ -90,23 +113,24 @@ int main(int argc, char **argv)
 	ret = pthread_create(&thr, NULL, thr_futex_wait, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "pthread_create error\n");
-		goto error;
+		ret = RET_ERROR;
+		goto out;
 	}
 
-	info("wait a while");
-	sleep(3);
+	info("wait a while\n");
+	usleep(WAKE_WAIT_US);
 	val = 2;
 	res = futex_wake(&val, 1, 0);
-	info("futex_wake %d", res);
+	info("futex_wake %d\n", res);
+	if (res != 1) {
+		fail("FUTEX_WAKE didn't find the waiting thread.\n");
+		ret = RET_FAIL;
+	}
 
-	info("join");
+	info("join\n");
 	pthread_join(thr, NULL);
 
-	print_result(ret);
-	return ret;
-
-error:
-	ret = RET_ERROR;
+ out:
 	print_result(ret);
 	return ret;
 }
