@@ -33,6 +33,7 @@
 #ifndef _LOGGING_H
 #define _LOGGING_H
 
+#include <string.h>
 #include <unistd.h>
 #include <linux/futex.h>
 
