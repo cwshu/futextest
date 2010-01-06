@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 	 */
 	ret = futex_cmp_requeue_pi(&f1, f1, &f2, 1, 0, FUTEX_PRIVATE_FLAG);
 	if (ret < 0) {
-		if (ret == -EINVAL) {
+		if (errno == EINVAL) {
 			/* 
 			 * The kernel correctly detected the mismatched
 			 * requeue_pi target and aborted. Wake the child with
