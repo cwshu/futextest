@@ -19,6 +19,12 @@ o Performance
   Performance tests shall measure quantifiable attributes of futex usage, such
   as timeout latency, operations per second, scheduler wake-ups, etc.
 
+Futextest will also provide example implementation of mutual exclusion
+primitives. These can be used as is in user applications or can serve as
+examples for system libraries. These will likely be added to either a new lib/
+directory or purely as header files under include/, I'm leaning toward the
+latter.
+
 Quick Start
 -----------
 # make
