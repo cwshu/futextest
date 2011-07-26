@@ -161,7 +161,7 @@ void *broadcast_wakerfn(void *arg)
 	int i = 0;
  
 	info("Waker: waiting for waiters to block\n");
-	while (waiters_blocked.val < THREAD_MAX);
+	while (waiters_blocked.val < THREAD_MAX)
 		usleep(1000);
 	usleep(1000);
 
@@ -210,7 +210,7 @@ void *signal_wakerfn(void *arg)
 	int i = 0;
 
 	info("Waker: waiting for waiters to block\n");
-	while (waiters_blocked.val < THREAD_MAX);
+	while (waiters_blocked.val < THREAD_MAX)
 		usleep(1000);
 	usleep(1000);
 
