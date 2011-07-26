@@ -77,7 +77,7 @@ void usage(char *prog)
 	printf("  -h	Display this help message\n");
 	printf("  -l	Lock the pi futex across requeue\n");
 	printf("  -o	Use a third party pi futex owner during requeue (cancels -l)\n");
-	printf("  -t N	Timeout in nanoseconds (default: 100,000)\n");
+	printf("  -t N	Timeout in nanoseconds (default: 0)\n");
 	printf("  -v L	Verbosity level: %d=QUIET %d=CRITICAL %d=INFO\n",
 	       VQUIET, VCRITICAL, VINFO);
 }
