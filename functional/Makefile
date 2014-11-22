@@ -5,6 +5,7 @@ LDFLAGS := $(LDFLAGS) -lpthread -lrt
 HEADERS := ../include/futextest.h
 TARGETS := \
 	futex_wait_timeout \
+	futex_wait_thp \
 	futex_wait_wouldblock \
 	futex_requeue_pi \
 	futex_requeue_pi_signal_restart \
